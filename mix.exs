@@ -7,11 +7,11 @@ defmodule Exdeath.MixProject do
       version: "0.1.0",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
-      description: "Your Library's Description", # ライブラリの概要
+      description: "api Circuit Breaker",
       package: [
-        maintainers: ["Your Name"],             # メンテナ(以前は :contributors でしたが deprecated になりました。)
-        licenses: ["MIT"],                       # ライセンス名、ここでは MIT にしてみました
-        links: %{"GitHub" => "https://github.com/ma2gedev/hex_sample"} # リンク集
+        maintainers: ["kobatako"],
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/kobatako/exdeath"}
       ],
       deps: deps()
     ]
