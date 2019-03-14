@@ -11,9 +11,10 @@ defmodule Exdeath.Supervisor do
     port = 4040
     {:ok, listen} = :gen_tcp.listen(port, [:binary, packet: :raw, active: true, ip: ip])
     children = [
-      worker(Exdeath.Receiver, [listen], name: Receiver)
+      worker(Exdeath.Receiver, [listen, Exdeath.ProxyControl], name: Receiver),
+      supervisor(Exdeath.ProxyControl, [], name: Receiver)
     ]
 
-    Supervisor.init(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one, max_restarts: 10000)
   end
 end
