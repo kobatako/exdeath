@@ -1,12 +1,14 @@
 defmodule Exdeath.Proxy do
   use GenServer
-  def start_link(listen, hosts, pid) do
-    GenServer.start_link(__MODULE__, [listen, hosts], name: {:global, pid})
+  alias Exdeath.Cluster
+
+  def start_link(listen, cluster, pid) do
+    GenServer.start_link(__MODULE__, [listen, cluster], name: {:global, pid})
   end
 
-  def init([listen, hosts]) do
+  def init([listen, cluster]) do
     GenServer.cast(self(), :accept)
-    {:ok, %{listen: listen, front: nil, back: nil, hosts: hosts}}
+    {:ok, %{listen: listen, front: nil, back: nil, cluster: cluster}}
 end
 
   def handle_cast(:accept, %{listen: listen}=state) do
@@ -24,10 +26,11 @@ end
     end
   end
 
-  def handle_info({:tcp, socket, packet}, %{front: socket, back: nil, hosts: [host| _]}=state) do
-    {:ok, proxy_host} = Exdeath.ProxyNode.set_connect(host)
-    Exdeath.ProxyNode.send(proxy_host, packet)
-    {:noreply, %{state| back: proxy_host}}
+  def handle_info({:tcp, socket, packet}, %{front: socket, back: nil, cluster: cluster}=state) do
+    node = Cluster.get_node(cluster)
+    {:ok, proxy_node} = Exdeath.ProxyNode.set_connect(node)
+    Exdeath.ProxyNode.send(proxy_node, packet)
+    {:noreply, %{state| back: proxy_node}}
   end
 
   def handle_info({:tcp, socket, packet}, %{front: socket, back: back}=state) do
