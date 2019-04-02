@@ -1,5 +1,7 @@
 defmodule Exdeath.ProxySupervisor do
 
+  alias Exdeath.Cluster
+  alias Exdeath.ProxyNode
   use Supervisor
 
   def start_link(listen) do
@@ -8,25 +10,28 @@ defmodule Exdeath.ProxySupervisor do
 
   def init(listen) do
     # background
-    hosts = [
-      %Exdeath.ProxyNode{
+    cluster =
+      Cluster.new_cluster()
+      |> Cluster.add_node(%ProxyNode{
         host: {192, 168, 33, 61},
         port: 8010,
-      }
-    ]
-    spawn(__MODULE__, :start_workers, [listen, hosts])
+      })
+      |> Cluster.set_load_balancer(
+        Exdeath.LoadBalancer.RoundRobin
+      )
+    spawn(__MODULE__, :start_workers, [listen, cluster])
     {:ok, { {:one_for_one, 6, 60}, []} }
   end
 
-  def start_workers(listen, hosts) do
-    for _ <- 1..50000, do: start_worker(listen, hosts)
+  def start_workers(listen, cluster) do
+    for _ <- 1..50000, do: start_worker(listen, cluster)
   end
 
-  def start_worker(listen, hosts) do
+  def start_worker(listen, cluster) do
     pid = make_ref()
     child_spec = %{
       id: pid,
-      start: {Exdeath.Proxy, :start_link, [listen, hosts, pid]},
+      start: {Exdeath.Proxy, :start_link, [listen, cluster, pid]},
       restart: :temporary,
       shutdown: :brutal_kill,
       type: :worker
