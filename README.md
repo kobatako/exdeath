@@ -1,6 +1,6 @@
 # Exdeath
 
-**TODO: Add description**
+Exdeath is tcp proxy server. application protocol supports http.
 
 ## Installation
 
