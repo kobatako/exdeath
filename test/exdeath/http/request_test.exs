@@ -15,6 +15,19 @@ defmodule Exdeath.Http.RequestTest do
     assert "max-age=0" == request.header["cache-control"]
   end
 
+  test "header request path query" do
+    header = "GET /path?key=value&key2=value2 HTTP/1.1\r\nHost: 192.168.33.101:4040\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3\r\nAccept-Encoding: gzip, deflate\r\nAccept-Language: ja,en;q=0.9\r\n\r\n"
+    request = Request.encode(header)
+
+    assert "GET" == request.method
+    assert "/path" == request.path
+    assert %{"key" => "value", "key2" => "value2"} == request.query
+    assert "HTTP/1.1" == request.version
+    assert "192.168.33.101:4040" == request.header["host"]
+    assert "keep-alive" == request.header["connection"]
+    assert "max-age=0" == request.header["cache-control"]
+  end
+
   test "set header" do
     header = "GET / HTTP/1.1\r\nHost: 192.168.33.101:4040\r\nConnection: keep-alive\r\nCache-Control: max-age=0\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3\r\nAccept-Encoding: gzip, deflate\r\nAccept-Language: ja,en;q=0.9\r\n\r\n"
 

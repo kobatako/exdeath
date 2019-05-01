@@ -6,7 +6,7 @@ defmodule Exdeath.Http.Request do
 
   alias Exdeath.Http.Request
 
-  defstruct method: "", path: "", version: "", header: %{}
+  defstruct method: "", path: "", query: %{}, version: "", header: %{}
 
   @doc """
   encode http request header
@@ -74,8 +74,6 @@ defmodule Exdeath.Http.Request do
   """
   def set_host(request, socket) do
     {:ok, ip, port} = fetch_ip(:inet.peername(socket))
-    IO.inspect port
-    IO.inspect ip <> ":" <> Integer.to_string(port)
     Request.set_header(request, "host", ip <> ":" <> Integer.to_string(port))
   end
 
@@ -97,7 +95,23 @@ defmodule Exdeath.Http.Request do
   end
 
   defp parse_request_format({method, path, version}) do
-    %Request{method: method, path: path, version: version}
+    [path| query] = String.split(path, "?", parts: 2, trim: true)
+    queries = parse_query(query)
+    %Request{method: method, path: path, query: queries, version: version}
+  end
+
+  defp parse_query([]) do
+    []
+  end
+
+  defp parse_query([query_string]=query) when is_list(query) do
+    String.split(query_string, "&")
+    |> Enum.map(&(String.split(&1, "=") |> List.to_tuple()))
+    |> Enum.reduce(%{}, fn {key, value}, acc -> Map.merge(acc, %{String.downcase(key) => String.trim(value)}) end)
+  end
+
+  defp parse_query(_) do
+    []
   end
 
   defp parse_header(headers) do
