@@ -6,7 +6,7 @@ defmodule Exdeath.Http.Request do
 
   alias Exdeath.Http.Request
 
-  defstruct method: "", path: "", query: %{}, version: "", header: %{}
+  defstruct method: "", path: "", query: %{}, fragment: "", version: "", header: %{}
 
   @doc """
   encode http request header
@@ -96,12 +96,31 @@ defmodule Exdeath.Http.Request do
 
   defp parse_request_format({method, path, version}) do
     [path| query] = String.split(path, "?", parts: 2, trim: true)
+    {queries, fragment} = split_query(query)
+    %Request{method: method, path: path, query: queries, fragment: fragment, version: version}
+  end
+
+  defp split_query([]) do
+    {%{}, ""}
+  end
+
+  defp split_query([query]) do
+    [query| fragment] = String.split(query, "#", parts: 2, trim: true)
     queries = parse_query(query)
-    %Request{method: method, path: path, query: queries, version: version}
+    fragment = parse_fragment(fragment)
+    {queries, fragment}
+  end
+
+  defp parse_fragment([]) do
+    ""
+  end
+
+  defp parse_fragment([fragment]) do
+    fragment
   end
 
   defp parse_query([]) do
-    []
+    %{}
   end
 
   defp parse_query([query_string]=query) when is_list(query) do
@@ -110,8 +129,14 @@ defmodule Exdeath.Http.Request do
     |> Enum.reduce(%{}, fn {key, value}, acc -> Map.merge(acc, %{String.downcase(key) => String.trim(value)}) end)
   end
 
-  defp parse_query(_) do
-    []
+  defp parse_query(query) when is_binary(query) do
+    String.split(query, "&")
+    |> Enum.map(&(String.split(&1, "=") |> List.to_tuple()))
+    |> Enum.reduce(%{}, fn {key, value}, acc -> Map.merge(acc, %{String.downcase(key) => String.trim(value)}) end)
+  end
+
+  defp parse_query([]) do
+    %{}
   end
 
   defp parse_header(headers) do
