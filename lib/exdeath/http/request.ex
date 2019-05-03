@@ -6,7 +6,7 @@ defmodule Exdeath.Http.Request do
 
   alias Exdeath.Http.Request
 
-  defstruct method: "", path: "", query: %{}, fragment: "", version: "", header: %{}
+  defstruct method: "", path: "", query: %{}, fragment: "", version: "", header: %{}, body: ""
 
   @doc """
   encode http request header
@@ -25,15 +25,17 @@ defmodule Exdeath.Http.Request do
     end
     |> Enum.reduce("", fn head, acc -> head <> "\r\n" <> acc end)
 
-    request <> "\r\n" <> header <> "\r\n"
+    request <> "\r\n" <> header <> "\r\n" <> format.body
   end
 
   @doc """
   parse http request
   """
   def parse([request| headers]) do
+    {split_headers, [body]} = split_header_body(headers, [])
     parse_request(request)
-    |> Map.put(:header, parse_header(headers))
+    |> Map.put(:header, parse_header(split_headers))
+    |> Map.put(:body, body)
   end
 
   @doc """
@@ -88,6 +90,14 @@ defmodule Exdeath.Http.Request do
     Request.add_header(request, "x-forwarded-for", for_ip)
     |> Request.add_header("x-forwarded-by", by_ip)
     |> Request.set_header("x-forwarded-host", host)
+  end
+
+  defp split_header_body([""| tail], header) do
+    {header, tail}
+  end
+
+  defp split_header_body([head| tail], header) do
+    split_header_body(tail, [head| header])
   end
 
   defp parse_request(request) do
@@ -153,6 +163,7 @@ defmodule Exdeath.Http.Request do
   defp ip_to_string({i1, i2, i3, i4}) do
     {:ok, "#{i1}.#{i2}.#{i3}.#{i4}"}
   end
+
   defp ip_to_string(_) do
     {:error, "not match ip format."}
   end
