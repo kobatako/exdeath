@@ -13,8 +13,12 @@ defmodule Exdeath.ProxySupervisor do
     cluster =
       Cluster.new_cluster()
       |> Cluster.add_node(%ProxyNode{
-        host: {192, 168, 33, 61},
-        port: 8010,
+        host: {192, 168, 33, 10},
+        port: 4000,
+      })
+      |> Cluster.add_node(%ProxyNode{
+        host: {192, 168, 33, 20},
+        port: 8080,
       })
       |> Cluster.set_load_balancer(
         Exdeath.LoadBalancer.RoundRobin
