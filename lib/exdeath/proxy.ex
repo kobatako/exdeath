@@ -9,7 +9,7 @@ defmodule Exdeath.Proxy do
 
   def init([listen, cluster]) do
     GenServer.cast(self(), :accept)
-    {:ok, %{listen: listen, front: nil, back: nil, cluster: cluster}}
+    {:ok, %{listen: listen, front: nil, back: nil, cluster: cluster, content: nil, request: nil}}
 end
 
   def handle_cast(:accept, %{listen: listen}=state) do
@@ -36,24 +36,59 @@ end
 
     {:ok, proxy_node} = Exdeath.ProxyNode.set_connect(node)
 
-    request = Request.encode(packet)
+    request = Request.encode(packet, true)
     |> Request.set_forwarded(socket)
     |> Request.set_host(proxy_node.conn)
 
-    Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
-    {:noreply, %{state| back: proxy_node}}
+    content = Request.fetch_content(request.header)
+    case content.type.type do
+      "multipart/form-data" ->
+        Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
+        {:noreply, %{state| back: proxy_node, content: content, request: request}}
+      _ ->
+        Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
+        {:noreply, %{state| back: proxy_node}}
+    end
   end
 
   @doc """
   from frontend(client) packet to backend.
   """
-  def handle_info({:tcp, socket, packet}, %{front: socket, back: back}=state) do
-    request = Request.encode(packet)
+  def handle_info({:tcp, socket, packet}, %{front: socket, back: back, content: nil}=state) do
+    request = Request.encode(packet, true)
     |> Request.set_forwarded(socket)
     |> Request.set_host(back.conn)
 
     Exdeath.ProxyNode.send(back, Request.decode(request))
     {:noreply, state}
+  end
+
+  @doc """
+  from frontend(client) packet to backend.
+  """
+  def handle_info({:tcp, socket, packet}, %{front: socket, back: back, content: content, request: request}=state) do
+    case content.type.type do
+      "multipart/form-data" ->
+        body = Request.encode(packet, false)
+        {:ok, boundary} = Map.fetch(content.type.args, "boundary")
+        request = %{request| body: request.body ++ body}
+
+        if Request.match_multipart_boundary(body, boundary) do
+          Exdeath.ProxyNode.send(back, packet)
+          {:noreply, %{state| request: nil, content: nil}}
+        else
+          Exdeath.ProxyNode.send(back, packet)
+          {:noreply, %{state| request: request}}
+        end
+
+      _ ->
+        request = Request.encode(packet, true)
+        |> Request.set_forwarded(socket)
+        |> Request.set_host(back.conn)
+
+        Exdeath.ProxyNode.send(back, Request.decode(request))
+        {:noreply, %{state| request: nil, content: nil}}
+    end
   end
 
   @doc """

@@ -11,8 +11,11 @@ defmodule Exdeath.Http.Request do
   @doc """
   encode http request header
   """
-  def encode(format) do
+  def encode(format, true) do
     String.split(format, "\r\n") |> parse
+  end
+  def encode(format, false) do
+    String.split(format, "\r\n")
   end
 
   @doc """
@@ -25,17 +28,18 @@ defmodule Exdeath.Http.Request do
     end
     |> Enum.reduce("", fn head, acc -> head <> "\r\n" <> acc end)
 
-    request <> "\r\n" <> header <> "\r\n" <> format.body
+    request <> "\r\n" <> header <> "\r\n" <> Enum.join(format.body, "\r\n")
   end
 
   @doc """
   parse http request
   """
   def parse([request| headers]) do
-    {split_headers, [body]} = split_header_body(headers, [])
+    {split_headers, body} = split_header_body(headers, [])
     parse_request(request)
     |> Map.put(:header, parse_header(split_headers))
     |> Map.put(:body, body)
+    |> Map.put(:body_len, body_length(body))
   end
 
   @doc """
@@ -92,6 +96,59 @@ defmodule Exdeath.Http.Request do
     |> Request.set_header("x-forwarded-host", host)
   end
 
+  @doc """
+  fetch content by header
+  """
+  def fetch_content(header) do
+    length = Map.get(header, "content-length", 0)
+    type = fetch_content_type(header)
+    %{length: length, type: type}
+  end
+
+  @doc """
+  match multipart boundary
+  """
+  def match_multipart_boundary(body, boundary) do
+    search_list(body, "--" <> boundary <> "--")
+  end
+
+  defp search_list([], value) do
+    false
+  end
+  defp search_list([value| _], value) do
+    true
+  end
+  defp search_list([_| tail], value) do
+    search_list(tail, value)
+  end
+
+  defp fetch_content_type(header) do
+    type = Map.get(header, "content-type", "")
+    types = String.split(type, ";")
+    split_content_type(types)
+  end
+  defp split_content_type([type| args]) do
+    args = parse_content_type_argument(args, %{})
+    %{type: type, args: args}
+  end
+
+  defp parse_content_type_argument([], args) do
+    args
+  end
+  defp parse_content_type_argument([head| tail], args) do
+    [key, value] = String.split(head, "=")
+    args = Map.put(args, String.trim(key), value)
+    parse_content_type_argument(tail, args)
+  end
+
+  defp body_length(body) do
+    Enum.join(body, "\r\n")
+    |> String.length()
+  end
+
+  defp split_header_body([""| [""]], header) do
+    {header, []}
+  end
   defp split_header_body([""| tail], header) do
     {header, tail}
   end
