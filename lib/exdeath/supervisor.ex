@@ -11,7 +11,8 @@ defmodule Exdeath.Supervisor do
     port = 4040
     {:ok, listen} = :gen_tcp.listen(port, [:binary, packet: :raw, active: true, ip: ip])
     children = [
-      supervisor(Exdeath.ProxySupervisor, [listen], name: ProxySupervisor)
+      supervisor(Exdeath.ProxySupervisor, [listen], name: ProxySupervisor),
+      supervisor(Exdeath.Filter.CircuitBreaker, [], name: CircuitBreaker)
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

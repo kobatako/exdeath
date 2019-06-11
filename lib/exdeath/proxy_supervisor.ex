@@ -12,10 +12,10 @@ defmodule Exdeath.ProxySupervisor do
     # background
     cluster =
       Cluster.new_cluster()
-      |> Cluster.add_node(%ProxyNode{
-        host: {192, 168, 33, 10},
-        port: 4000,
-      })
+      # |> Cluster.add_node(%ProxyNode{
+      #   host: {192, 168, 33, 10},
+      #   port: 4000,
+      # })
       |> Cluster.add_node(%ProxyNode{
         host: {192, 168, 33, 20},
         port: 8080,

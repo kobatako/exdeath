@@ -2,6 +2,8 @@ defmodule Exdeath.Proxy do
   use GenServer
   alias Exdeath.Cluster
   alias Exdeath.Http.Request
+  alias Exdeath.Http.Response
+  alias Exdeath.Filter.CircuitBreaker
 
   def start_link(listen, cluster, pid) do
     GenServer.start_link(__MODULE__, [listen, cluster], name: {:global, pid})
@@ -40,14 +42,24 @@ end
     |> Request.set_forwarded(socket)
     |> Request.set_host(proxy_node.conn)
 
+    CircuitBreaker.input(request)
+
     content = Request.fetch_content(request.header)
     case content.type.type do
       "multipart/form-data" ->
         Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
         {:noreply, %{state| back: proxy_node, content: content, request: request}}
       _ ->
-        Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
-        {:noreply, %{state| back: proxy_node}}
+
+        with {:on, response} <- CircuitBreaker.input(request)
+        do
+            :gen_tcp.send(socket, Response.decode(response))
+        else
+          _ ->
+            Exdeath.ProxyNode.send(proxy_node, Request.decode(request))
+        end
+
+        {:noreply, %{state| back: proxy_node, request: request}}
     end
   end
 
@@ -59,8 +71,14 @@ end
     |> Request.set_forwarded(socket)
     |> Request.set_host(back.conn)
 
-    Exdeath.ProxyNode.send(back, Request.decode(request))
-    {:noreply, state}
+    with {:on, response} <- CircuitBreaker.input(request)
+    do
+        :gen_tcp.send(socket, Response.decode(response))
+    else
+      _ ->
+        Exdeath.ProxyNode.send(back, Request.decode(request))
+    end
+    {:noreply, %{state| request: request}}
   end
 
   @doc """
@@ -86,7 +104,14 @@ end
         |> Request.set_forwarded(socket)
         |> Request.set_host(back.conn)
 
-        Exdeath.ProxyNode.send(back, Request.decode(request))
+        with {:on, response} <- CircuitBreaker.input(request)
+        do
+            :gen_tcp.send(socket, Response.decode(response))
+        else
+          _ ->
+            Exdeath.ProxyNode.send(back, Request.decode(request))
+        end
+
         {:noreply, %{state| request: nil, content: nil}}
     end
   end
@@ -94,8 +119,12 @@ end
   @doc """
   from backend packet to frontend(client).
   """
-  def handle_info({:tcp, socket, packet}, %{front: front, back: %{conn: socket}}=state) do
-    :gen_tcp.send(front, packet)
+  def handle_info({:tcp, socket, packet}, %{front: front, back: %{conn: socket}, request: request}=state) do
+    response = Response.encode(packet)
+
+    CircuitBreaker.output(request, response)
+
+    :gen_tcp.send(front, Response.decode(response))
     {:noreply, state}
   end
 
